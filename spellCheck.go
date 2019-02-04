@@ -11,6 +11,9 @@ import (
 	"strconv"
 )
 
+var WordModel  map[string]int
+var ErrorModel map[string]map[string]int
+
 // Remove duplicates in a slice 
 func removeDuplicates(elements []string) []string {
 	encountered := map[string]bool{}
@@ -31,21 +34,21 @@ func removeDuplicates(elements []string) []string {
 }
 
 // Function that gets the maximum probable string using given models
-func max(origWord string, words []string, wordModel map[string]int, errorModel map[string]map[string]int) string {
+func max(origWord string, words []string) string {
 	var maxProb float64
 	var bestString string
 
     for i := range words {
 		if words[i] == origWord {
-			maxProb = float64(wordModel[words[i]])
+			maxProb = float64(WordModel[words[i]])
 			bestString = words[i]
 		} else {
 			sum := 0
-			for j := range errorModel[words[i]] {
-				sum += errorModel[words[i]][j]
+			for j := range ErrorModel[words[i]] {
+				sum += ErrorModel[words[i]][j]
 			}
 
-			maxProb = float64(wordModel[words[i]]) * (float64(errorModel[words[i]][origWord])/float64(sum))
+			maxProb = float64(WordModel[words[i]]) * (float64(ErrorModel[words[i]][origWord])/float64(sum))
 			bestString = words[i]
 		}
 
@@ -54,18 +57,18 @@ func max(origWord string, words []string, wordModel map[string]int, errorModel m
 	
     for i := range words {
 		if words[i] == origWord {
-			tempProb := float64(wordModel[words[i]])
+			tempProb := float64(WordModel[words[i]])
 			if tempProb > maxProb {
 				maxProb = tempProb
 				bestString = words[i]
 			}
 		} else {
 			sum := 0
-			for j := range errorModel[words[i]] {
-				sum += errorModel[words[i]][j]
+			for j := range ErrorModel[words[i]] {
+				sum += ErrorModel[words[i]][j]
 			}
 
-			tempProb := float64(wordModel[words[i]]) * (float64(errorModel[words[i]][origWord])/float64(sum))
+			tempProb := float64(WordModel[words[i]]) * (float64(ErrorModel[words[i]][origWord])/float64(sum))
 			if tempProb > maxProb {
 				maxProb = tempProb
 				bestString = words[i]
@@ -169,7 +172,7 @@ func edits2(word string, ch chan string) {
 }
 
 // Function to return the best candidate present in model formed by given edits distance function
-func best(origWord string, edits func(string, chan string), wordModel map[string]int, errorModel map[string]map[string]int) string {
+func best(origWord string, edits func(string, chan string)) string {
 	ch := make(chan string, 1024*1024)
 	go func() { edits(origWord, ch); ch <- "" }()
 
@@ -180,7 +183,7 @@ func best(origWord string, edits func(string, chan string), wordModel map[string
 		if word == "" { break }
 
 		if word == origWord {
-			tempProb := float64(wordModel[word]) 
+			tempProb := float64(WordModel[word]) 
 
 			if tempProb > maxProb {
 				maxProb = tempProb
@@ -188,11 +191,11 @@ func best(origWord string, edits func(string, chan string), wordModel map[string
 			}
 		} else {
 			sum := 0
-			for j := range errorModel[word] {
-				sum += errorModel[word][j]
+			for j := range ErrorModel[word] {
+				sum += ErrorModel[word][j]
 			}
 
-			tempProb := float64(wordModel[word]) * (float64(errorModel[word][origWord])/float64(sum))
+			tempProb := float64(WordModel[word]) * (float64(ErrorModel[word][origWord])/float64(sum))
 			if tempProb > maxProb {
 				maxProb = tempProb
 				bestString = word
@@ -205,26 +208,25 @@ func best(origWord string, edits func(string, chan string), wordModel map[string
 		maxFreq := 0
 		for word := range ch {
 			if word == "" { break }
-			if freq, present := wordModel[word]; present && freq > maxFreq {
+			if freq, present := WordModel[word]; present && freq > maxFreq {
 				maxFreq, bestString = freq, word
 			}
 		}
 	}
 
-	
 	return bestString
 }
 
-func correct(word string, wordModel map[string]int, errorModel map[string]map[string]int) string {
+func correct(word string) string {
 	var possibleWords []string
 
-	if _, present := wordModel[word]; present {
+	if _, present := WordModel[word]; present {
 		possibleWords = append(possibleWords, word)	
 	}
-	if correction := best(word, edits1, wordModel, errorModel); correction != "" {
+	if correction := best(word, edits1); correction != "" {
 		possibleWords = append(possibleWords, correction) 
 	}
-	if correction := best(word, edits2, wordModel, errorModel); correction != "" { 
+	if correction := best(word, edits2); correction != "" { 
 		possibleWords = append(possibleWords, correction) 
 	}
 
@@ -236,38 +238,48 @@ func correct(word string, wordModel map[string]int, errorModel map[string]map[st
 	// Removing duplicates in possibleWords
 	possibleWords = removeDuplicates(possibleWords)
 
-	return max(word, possibleWords, wordModel, errorModel)
+	return max(word, possibleWords)
 }
 
-func Correctsentence(sentence string, wordModel map[string]int, errorModel map[string]map[string]int) string {
+func helper(word string, ch chan string) {
+	re   := regexp.MustCompile(`([^!?,.;]+)`)
+	ch <- re.ReplaceAllStringFunc(word, func(m string) string {
+				return correct(m)
+			})
+}
 
-	// s1 := strings.Split(sentence, "\n")
-	// for i := range s1 {
-	// 	s2 := strings.Split(s1[i], "\t")
-	// 	for j := range s2 {
-	// 		s3 := strings.Split(s2[j], " ")
-	// 		for k := range s3 {
-	// 			re   := regexp.MustCompile(`([^!?,.]+)`)
-	// 			s3[k] = re.ReplaceAllStringFunc(s3[k], func(m string) string {
-	// 						return correct(m, wordModel, errorModel)
+func Correctsentence(sentence string) string {
+
+	s1 := strings.Split(sentence, "\n")
+	for i := range s1 {
+		s2 := strings.Split(s1[i], "\t")
+		for j := range s2 {
+			s3 := strings.Split(s2[j], " ")
+			channels := make([]chan string, len(s3))
+			for k := range s3 {
+				channels[k] = make(chan string)
+				go helper(s3[k], channels[k])
+			}
+
+			for k := range s3 {
+				s3[k] = <-channels[k]
+			}
+
+			s2[j] = strings.Join(s3, " ")
+		}
+		s1[i] = strings.Join(s2, "\t")
+	}
+	correctedSentence := strings.Join(s1, "\n")
+	// re   := regexp.MustCompile(`([^!?,.\n\t ]+)`)
+	// correctedSentence := re.ReplaceAllStringFunc(sentence, func(m string) string {
+	// 						return correct(m)
 	// 					})
-	// 		}
-	// 		s2[j] = strings.Join(s3, " ")
-	// 	}
-	// 	s1[i] = strings.Join(s2, "\t")
-	// }
-	// correctedSentence := strings.Join(s1, "\n")
-	re   := regexp.MustCompile(`([^!?,.\n\t ]+)`)
-	correctedSentence := re.ReplaceAllStringFunc(sentence, func(m string) string {
-							return correct(m, wordModel, errorModel)
-						})
 	return correctedSentence
 }
 
 func main() {
-	WordModel, ErrorModel := train("words.txt", "errors.txt")
+	WordModel, ErrorModel = train("words.txt", "errors.txt")
 	startTime := time.Now()
-	fmt.Println(Correctsentence("Audiance sayzs: tumblr ...", WordModel, ErrorModel))
-	fmt.Println(Correctsentence("Speling errurs in somethink. Whutever; unusuel misteakes everyware?", WordModel, ErrorModel))
+	fmt.Println(Correctsentence("Speling errurs in somethink. Whutever; unusuel misteakes everyware?"))
 	fmt.Printf("Time: %v\n", time.Now().Sub(startTime))
 }
