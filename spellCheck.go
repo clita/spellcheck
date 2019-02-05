@@ -9,14 +9,22 @@ import (
 	"regexp"
 	"strings"
 	// "time"
+	"math"
 	"strconv"
 	"encoding/gob"
 )
 
-var WordModel  map[string]int
-var ErrorModel map[string]map[string]int
-var wordMapFile  string = "/.spellWordMap.gob"
-var errorMapFile string = "/.spellErrorMap.gob"
+var WordModel     map[string]int
+var ErrorModel    map[string]map[string]int
+var BigramModel   map[string]int
+var wordMapFile   string  = "/.spellWordMap.gob"
+var errorMapFile  string  = "/.spellErrorMap.gob"
+var bigramMapFile string  = "/.spellBigramMap.gob"
+var sumWordFreq   int     = 0
+var sumBigramFreq int     = 0
+var flag		  int     = 0	// To prevent infinite movement in WordSegments and CorrectSentence
+
+type Pair struct{a, b string}
 
 // Remove duplicates in a slice 
 func removeDuplicates(elements []string) []string {
@@ -84,16 +92,16 @@ func max(origWord string, words []string) string {
 
 // Reading words file and storing their frequencies in the map
 func trainWordsModel(words_training_data string) map[string]int {
-	file1, err := os.Open(words_training_data)
+	file, err := os.Open(words_training_data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file1.Close()
+	defer file.Close()
 
-	scanner 	  := bufio.NewScanner(file1)
+	scanner 	  := bufio.NewScanner(file)
 	NWORDS 		  := make(map[string]int)
-	wordPattern   := regexp.MustCompile("[a-z]+")
-	numberPattern := regexp.MustCompile("\\d+")
+	wordPattern   := regexp.MustCompile("^[0-9a-zA-Z]+")
+	numberPattern := regexp.MustCompile("\\d+$")
 	for scanner.Scan() {
 		w := wordPattern.FindString(scanner.Text())
 		n := numberPattern.FindString(scanner.Text())
@@ -110,6 +118,35 @@ func trainWordsModel(words_training_data string) map[string]int {
 	}
 
 	return NWORDS
+}
+
+// Training the bigrams model
+func trainBigramModel(bigrams_training_data string) map[string]int {
+	file, err := os.Open(bigrams_training_data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	scanner 	  := bufio.NewScanner(file)
+	BWORDS 		  := make(map[string]int)
+	wordPattern   := regexp.MustCompile("^[0-9a-zA-Z]+\\s[0-9a-zA-Z]+")
+	numberPattern := regexp.MustCompile("\\d+$")
+	for scanner.Scan() {
+		w := wordPattern.FindString(scanner.Text())
+		n := numberPattern.FindString(scanner.Text())
+		BWORDS[w], err = strconv.Atoi(n)
+
+		if err!=nil {
+			log.Fatal(err)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+
+	return BWORDS
 }
 
 // Training the error model
@@ -148,7 +185,6 @@ func trainErrorModel(error_training_data string) map[string]map[string]int {
 // Function to return all possible strings having edit distance of 1 from word
 func edits1(word string, ch chan string) {
 	const alphabet = "abcdefghijklmnopqrstuvwxyz"
-	type Pair struct{a, b string}
 	var splits []Pair
 
 	// Creating a list of all tuples formed by splitting the word at all possible positions
@@ -176,7 +212,7 @@ func edits2(word string, ch chan string) {
 	go func() { edits1(word, ch1); ch1 <- "" }()
 	for e1 := range ch1 {
 		if e1 == "" { break }
-		go func(){ edits1(e1, ch) }()
+		go func(e1 string){ edits1(e1, ch) }(e1)
 	}
 }
 
@@ -241,7 +277,11 @@ func correct(word string) string {
 
 	// If no word at edit distance of 1 or 2 matches
 	if len(possibleWords) == 0 {
-		return word
+		if flag == 0 && len(word) >= 6 {
+			return WordSegments(word)
+		} else {
+			return word
+		}
 	}
 
 	// Removing duplicates in possibleWords
@@ -286,13 +326,113 @@ func Correctsentence(sentence string) string {
 	return correctedSentence
 }
 
+func splits(text string, start int, L int) []Pair {
+	// "Return a list of all (first, rest) pairs; start <= len(first) <= L."
+	
+	// Default Values for start and L
+	if start == 0 {
+    		start = 1
+	}
+	if L == 0 {
+		L = 10
+        }
+
+	var splitArr []Pair
+	for i := start; i < int(math.Min( float64(L), float64(len(text)) ) + 1); i++ {
+		splitArr = append(splitArr, Pair{text[:i], text[i:]}) 
+	}
+	
+	return splitArr
+}
+
+// Get probability/frequency of given word in WordModel
+func p1w(word string) float64 {
+	if freq, present := WordModel[word]; present {
+		return float64(freq)/float64(sumWordFreq)
+	}
+	
+	return float64(0)
+}
+
+// Get probability/frequency of given bigram in BigramModel
+func p2w(bigram string) float64 {
+	if freq, present := BigramModel[bigram]; present {
+		return float64(freq)/float64(sumBigramFreq)
+	}
+	
+	return float64(0)
+}
+
+// The probability of a sequence of words, using bigram data, given prev word
+func pWords(words []string) float64 {
+	result := float64(1e3)
+	for i:= range words {
+		if i == 0 {
+			result *= cPword(words[i], "<S>")	
+		} else {
+			result *= cPword(words[i], words[i-1])
+		}
+	}
+	
+	return result
+}
+
+// Conditional probability of word, given previous word
+func cPword(word, prev string) float64 {
+    bigram := prev + " " + word
+
+	if prev != "<S>" && p2w(bigram) > 0 && p1w(prev) > 0 {
+        	return p2w(bigram) / p1w(prev)
+	}
+	
+	// Average the back-off value and zero
+    return p1w(word)/float64(2)
+}
+
+func segmentHelper(text string, memo map[string][]string) []string {
+	result := []string{}
+	
+	if len(text) == 0 { 
+       		return result
+	}
+	
+	if val, present := memo[text]; present {
+		return val
+	}
+	 
+	candidates := [][]string{}
+	for _, s := range splits(text, 0, 0) {
+	        candidates = append(candidates, append([]string{s.a}, segmentHelper(s.b, memo)...))
+	}
+	
+	maxProb := float64(0)
+	for i:= range candidates {
+		tempProb := pWords(candidates[i])
+		if tempProb > maxProb {
+			maxProb = tempProb
+			result  = candidates[i]
+		}
+	}
+	
+	memo[text] = result
+	return result
+}
+
+func WordSegments(text string) string {
+	memo   := map[string][]string{}
+	result := segmentHelper(text, memo)
+	flag    = 1
+	return Correctsentence(strings.Join(result, " "))
+}
+
 func Init(){
 	usr, err := user.Current()
     if err != nil {
         log.Fatal( err )
     }
-	wordMapFile = usr.HomeDir + wordMapFile
- 	errorMapFile = usr.HomeDir + errorMapFile
+	wordMapFile   = usr.HomeDir + wordMapFile
+	errorMapFile  = usr.HomeDir + errorMapFile
+	bigramMapFile = usr.HomeDir + bigramMapFile
 
 	// Load WordMap
 	if _, err := os.Stat(wordMapFile); err == nil {
@@ -350,6 +490,42 @@ func Init(){
 	} else {
 		log.Fatal(err)
 	}
+
+	// Load BigramMap
+	if _, err := os.Stat(bigramMapFile); err == nil {
+		file, err := os.Open(bigramMapFile)
+		defer file.Close()
+
+		if err == nil {
+			decoder := gob.NewDecoder(file)
+			err = decoder.Decode(&BigramModel)
+		} 
+		if err != nil {
+			log.Fatal(err)
+		}
+	  
+	} else if os.IsNotExist(err) {
+		BigramModel = trainBigramModel("bigrams.txt")
+		file, err := os.Create(bigramMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(BigramModel)
+		} else {
+			log.Fatal(err)
+		}
+	} else {
+		log.Fatal(err)
+	}
+
+	for _, v1 := range WordModel {
+		sumWordFreq += v1
+	} 
+	
+	for _, v2 := range BigramModel {
+		sumBigramFreq += v2
+	}
 }
 
 // Save maps in file
@@ -357,11 +533,11 @@ func SaveMaps() {
 	usr, err := user.Current()
     if err != nil {
         log.Fatal( err )
-    }
-	wordMapFile = usr.HomeDir + wordMapFile
+	}
+	wordMapFile  = usr.HomeDir + wordMapFile
 	errorMapFile = usr.HomeDir + errorMapFile
 	 
-	// Load WordMap
+	// Save WordMap
 	if _, err := os.Stat(wordMapFile); err == nil {
 		file, err := os.Open(wordMapFile)
 		defer file.Close()
@@ -389,7 +565,7 @@ func SaveMaps() {
 		log.Fatal(err)
 	}
 
-	// Load ErrorMap
+	// Save ErrorMap
 	if _, err := os.Stat(errorMapFile); err == nil {
 		file, err := os.Open(errorMapFile)
 		defer file.Close()
@@ -421,6 +597,8 @@ func SaveMaps() {
 // func main() {
 // 	Init()
 // 	startTime := time.Now()
-// 	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes?"))
+// 	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes? far"))
+// 	b := "hellothereasdasfarasdadsdad"
+// 	fmt.Println(WordSegments(b))
 // 	fmt.Printf("Time: %v\n", time.Now().Sub(startTime))
 // }
