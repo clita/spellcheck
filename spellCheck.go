@@ -5,14 +5,18 @@ import (
 	"log"
 	"bufio"
 	"os"
+	"os/user"
 	"regexp"
 	"strings"
 	"time"
 	"strconv"
+	"encoding/gob"
 )
 
 var WordModel  map[string]int
 var ErrorModel map[string]map[string]int
+var wordMapFile  string = "/.spellWordMap.gob"
+var errorMapFile string = "/.spellErrorMap.gob"
 
 // Remove duplicates in a slice 
 func removeDuplicates(elements []string) []string {
@@ -79,7 +83,7 @@ func max(origWord string, words []string) string {
 }
 
 // Reading words file and storing their frequencies in the map
-func train(words_training_data string, error_training_data string) (map[string]int, map[string]map[string]int) {
+func trainWordsModel(words_training_data string) map[string]int {
 	file1, err := os.Open(words_training_data)
 	if err != nil {
 		log.Fatal(err)
@@ -105,14 +109,19 @@ func train(words_training_data string, error_training_data string) (map[string]i
 		log.Fatal(err)
 	}
 
-	file2, err := os.Open(error_training_data)
+	return NWORDS
+}
+
+// Training the error model
+func trainErrorModel(error_training_data string) map[string]map[string]int {
+	file, err := os.Open(error_training_data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file2.Close()
-	errorScanner  := bufio.NewScanner(file2)
+	defer file.Close()
+	errorScanner  := bufio.NewScanner(file)
 	EWORDS 		  := make(map[string]map[string]int)
-	wordPattern    = regexp.MustCompile("[^:]+:")
+	wordPattern   := regexp.MustCompile("[^:]+:")
 	errorPattern  := regexp.MustCompile("\\s[a-z]+")
 	
 	for errorScanner.Scan() {
@@ -133,12 +142,12 @@ func train(words_training_data string, error_training_data string) (map[string]i
 		log.Fatal(err)
 	}
 	
-	return NWORDS, EWORDS
+	return EWORDS
 }
 
 // Function to return all possible strings having edit distance of 1 from word
 func edits1(word string, ch chan string) {
-	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const alphabet = "abcdefghijklmnopqrstuvwxyz"
 	type Pair struct{a, b string}
 	var splits []Pair
 
@@ -167,7 +176,7 @@ func edits2(word string, ch chan string) {
 	go func() { edits1(word, ch1); ch1 <- "" }()
 	for e1 := range ch1 {
 		if e1 == "" { break }
-		edits1(e1, ch)
+		go func(){ edits1(e1, ch) }()
 	}
 }
 
@@ -277,9 +286,141 @@ func Correctsentence(sentence string) string {
 	return correctedSentence
 }
 
+func Init(){
+	usr, err := user.Current()
+    if err != nil {
+        log.Fatal( err )
+    }
+	wordMapFile = usr.HomeDir + wordMapFile
+ 	errorMapFile = usr.HomeDir + errorMapFile
+
+	// Load WordMap
+	if _, err := os.Stat(wordMapFile); err == nil {
+		file, err := os.Open(wordMapFile)
+		defer file.Close()
+
+		if err == nil {
+			decoder := gob.NewDecoder(file)
+			err = decoder.Decode(&WordModel)
+		} 
+		if err != nil {
+			log.Fatal(err)
+		}
+	  
+	} else if os.IsNotExist(err) {
+		WordModel = trainWordsModel("words.txt")
+		file, err := os.Create(wordMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(WordModel)
+		} else {
+			log.Fatal(err)
+		}
+		 
+	} else {
+		log.Fatal(err)
+	}
+
+	// Load ErrorMap
+	if _, err := os.Stat(errorMapFile); err == nil {
+		file, err := os.Open(errorMapFile)
+		defer file.Close()
+
+		if err == nil {
+			decoder := gob.NewDecoder(file)
+			err = decoder.Decode(&ErrorModel)
+		} 
+		if err != nil {
+			log.Fatal(err)
+		}
+	  
+	} else if os.IsNotExist(err) {
+		ErrorModel = trainErrorModel("errors.txt")
+		file, err := os.Create(errorMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(ErrorModel)
+		} else {
+			log.Fatal(err)
+		}
+	} else {
+		log.Fatal(err)
+	}
+}
+
+// Save maps in file
+func SaveMaps() {
+	usr, err := user.Current()
+    if err != nil {
+        log.Fatal( err )
+    }
+	wordMapFile = usr.HomeDir + wordMapFile
+	errorMapFile = usr.HomeDir + errorMapFile
+	 
+	// Load WordMap
+	if _, err := os.Stat(wordMapFile); err == nil {
+		file, err := os.Open(wordMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(WordModel)
+		} else {
+			log.Fatal(err)
+		}
+	  
+	} else if os.IsNotExist(err) {
+		WordModel = trainWordsModel("words.txt")
+		file, err := os.Create(wordMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(WordModel)
+		} else {
+			log.Fatal(err)
+		}
+		 
+	} else {
+		log.Fatal(err)
+	}
+
+	// Load ErrorMap
+	if _, err := os.Stat(errorMapFile); err == nil {
+		file, err := os.Open(errorMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(ErrorModel)
+		} else {
+			log.Fatal(err)
+		}
+	  
+	} else if os.IsNotExist(err) {
+		ErrorModel = trainErrorModel("errors.txt")
+		file, err := os.Create(errorMapFile)
+		defer file.Close()
+
+		if err == nil {
+			encoder := gob.NewEncoder(file)
+			encoder.Encode(ErrorModel)
+		} else {
+			log.Fatal(err)
+		}
+		
+	} else {
+		log.Fatal(err)
+	}
+}
+
 func main() {
-	WordModel, ErrorModel = train("words.txt", "errors.txt")
+	Init()
 	startTime := time.Now()
-	fmt.Println(Correctsentence("Speling errurs in somethink. Whutever; unusuel misteakes everyware?"))
+	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes?"))
 	fmt.Printf("Time: %v\n", time.Now().Sub(startTime))
 }
