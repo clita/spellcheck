@@ -411,7 +411,7 @@ harassment: harasment, harrasment
 creep: creap
 enemies: emmines, enemeys, enemeies, emimies, enmenies, enameyes, enmoneys, eminies, enemes, enimes, emmies, emeny, eniemies, enimeys, enamys, enamies, enemyies, emenies, enimies, enimeies, enmies, enimeus, enemys, enemy, enanis, enimesies, ememy, emenys, enmeys, enames, enemy's
 daddy's: dadies
-for: fror, fur, fre, from, far, of, of, fro, fro, fore, fore, four, four, foir, in, forr, fon, foow, frou, or, fo, fo
+for: fror, fur, fre, fro, fro, fore, fore, four, four, foir, in, forr, fon, foow, frou, or, fo, fo
 bottom: botem, bottem, botome, botton, botton, botom
 fox: foxx
 polluted: poluted
@@ -6866,7 +6866,7 @@ activities: activites, activeties, activerties, activitys
 fax: faxe
 woman: womon, women, women, wamon
 worse: wors, worst, wosre
-far: fare, fare, form, for
+far: farr, faar
 fat: fet
 psychologist: pscolgst, sicolagest, psicolagest, psycolagest
 sons: sus, sun, som, soon, son, sands, sones, souns, suns, sunent
