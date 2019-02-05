@@ -1,14 +1,14 @@
-package main
+package spellcheck
 
 import (
-	"fmt"
+	// "fmt"
 	"log"
 	"bufio"
 	"os"
 	"os/user"
 	"regexp"
 	"strings"
-	"time"
+	// "time"
 	"strconv"
 	"encoding/gob"
 )
@@ -412,15 +412,15 @@ func SaveMaps() {
 		} else {
 			log.Fatal(err)
 		}
-		
+
 	} else {
 		log.Fatal(err)
 	}
 }
 
-func main() {
-	Init()
-	startTime := time.Now()
-	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes?"))
-	fmt.Printf("Time: %v\n", time.Now().Sub(startTime))
-}
+// func main() {
+// 	Init()
+// 	startTime := time.Now()
+// 	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes?"))
+// 	fmt.Printf("Time: %v\n", time.Now().Sub(startTime))
+// }
