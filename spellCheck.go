@@ -2,31 +2,31 @@ package spellcheck
 
 import (
 	// "fmt"
-	"log"
 	"bufio"
+	"log"
 	"os"
 	"os/user"
 	"regexp"
 	"strings"
 	// "time"
+	"encoding/gob"
 	"math"
 	"strconv"
-	"encoding/gob"
 )
 
-var WordModel     map[string]int
-var ErrorModel    map[string]map[string]int
-var BigramModel   map[string]int
-var wordMapFile   string  = "/.spellWordMap.gob"
-var errorMapFile  string  = "/.spellErrorMap.gob"
-var bigramMapFile string  = "/.spellBigramMap.gob"
-var sumWordFreq   int     = 0
-var sumBigramFreq int     = 0
-var flag		  int     = 0	// To prevent infinite movement in WordSegments and CorrectSentence
+var WordModel map[string]int
+var ErrorModel map[string]map[string]int
+var BigramModel map[string]int
+var wordMapFile string = "/.spellWordMap.gob"
+var errorMapFile string = "/.spellErrorMap.gob"
+var bigramMapFile string = "/.spellBigramMap.gob"
+var sumWordFreq int = 0
+var sumBigramFreq int = 0
+var flag int = 0 // To prevent infinite movement in WordSegments and CorrectSentence
 
-type Pair struct{a, b string}
+type Pair struct{ a, b string }
 
-// Remove duplicates in a slice 
+// Remove duplicates in a slice
 func removeDuplicates(elements []string) []string {
 	encountered := map[string]bool{}
 	result := []string{}
@@ -50,7 +50,7 @@ func max(origWord string, words []string) string {
 	var maxProb float64
 	var bestString string
 
-    for i := range words {
+	for i := range words {
 		if words[i] == origWord {
 			maxProb = float64(WordModel[words[i]])
 			bestString = words[i]
@@ -60,14 +60,14 @@ func max(origWord string, words []string) string {
 				sum += ErrorModel[words[i]][j]
 			}
 
-			maxProb = float64(WordModel[words[i]]) * (float64(ErrorModel[words[i]][origWord])/float64(sum))
+			maxProb = float64(WordModel[words[i]]) * (float64(ErrorModel[words[i]][origWord]) / float64(sum))
 			bestString = words[i]
 		}
 
-        break
+		break
 	}
-	
-    for i := range words {
+
+	for i := range words {
 		if words[i] == origWord {
 			tempProb := float64(WordModel[words[i]])
 			if tempProb > maxProb {
@@ -80,14 +80,14 @@ func max(origWord string, words []string) string {
 				sum += ErrorModel[words[i]][j]
 			}
 
-			tempProb := float64(WordModel[words[i]]) * (float64(ErrorModel[words[i]][origWord])/float64(sum))
+			tempProb := float64(WordModel[words[i]]) * (float64(ErrorModel[words[i]][origWord]) / float64(sum))
 			if tempProb > maxProb {
 				maxProb = tempProb
 				bestString = words[i]
 			}
 		}
-    }
-    return bestString
+	}
+	return bestString
 }
 
 // Reading words file and storing their frequencies in the map
@@ -98,9 +98,9 @@ func trainWordsModel(words_training_data string) map[string]int {
 	}
 	defer file.Close()
 
-	scanner 	  := bufio.NewScanner(file)
-	NWORDS 		  := make(map[string]int)
-	wordPattern   := regexp.MustCompile("^[0-9a-zA-Z]+")
+	scanner := bufio.NewScanner(file)
+	NWORDS := make(map[string]int)
+	wordPattern := regexp.MustCompile("^[0-9a-zA-Z]+")
 	numberPattern := regexp.MustCompile("\\d+$")
 	for scanner.Scan() {
 		w := wordPattern.FindString(scanner.Text())
@@ -108,7 +108,7 @@ func trainWordsModel(words_training_data string) map[string]int {
 		NWORDS[w], err = strconv.Atoi(n)
 		NWORDS[strings.Title(w)] = NWORDS[w]
 
-		if err!=nil {
+		if err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -128,16 +128,16 @@ func trainBigramModel(bigrams_training_data string) map[string]int {
 	}
 	defer file.Close()
 
-	scanner 	  := bufio.NewScanner(file)
-	BWORDS 		  := make(map[string]int)
-	wordPattern   := regexp.MustCompile("^[0-9a-zA-Z]+\\s[0-9a-zA-Z]+")
+	scanner := bufio.NewScanner(file)
+	BWORDS := make(map[string]int)
+	wordPattern := regexp.MustCompile("^[0-9a-zA-Z]+\\s[0-9a-zA-Z]+")
 	numberPattern := regexp.MustCompile("\\d+$")
 	for scanner.Scan() {
 		w := wordPattern.FindString(scanner.Text())
 		n := numberPattern.FindString(scanner.Text())
 		BWORDS[w], err = strconv.Atoi(n)
 
-		if err!=nil {
+		if err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -156,17 +156,17 @@ func trainErrorModel(error_training_data string) map[string]map[string]int {
 		log.Fatal(err)
 	}
 	defer file.Close()
-	errorScanner  := bufio.NewScanner(file)
-	EWORDS 		  := make(map[string]map[string]int)
-	wordPattern   := regexp.MustCompile("[^:]+:")
-	errorPattern  := regexp.MustCompile("\\s[a-z]+")
-	
+	errorScanner := bufio.NewScanner(file)
+	EWORDS := make(map[string]map[string]int)
+	wordPattern := regexp.MustCompile("[^:]+:")
+	errorPattern := regexp.MustCompile("\\s[a-z]+")
+
 	for errorScanner.Scan() {
-		if(len(errorScanner.Text()) > 0) {
+		if len(errorScanner.Text()) > 0 {
 			temp := wordPattern.FindString(errorScanner.Text())
-			origWord   := temp[:len(temp)-1]
+			origWord := temp[:len(temp)-1]
 			errorWords := errorPattern.FindAllString(errorScanner.Text(), -1)
-			
+
 			EWORDS[origWord] = make(map[string]int)
 			for i := range errorWords {
 				errorWords[i] = errorWords[i][1:]
@@ -178,7 +178,7 @@ func trainErrorModel(error_training_data string) map[string]map[string]int {
 	if err := errorScanner.Err(); err != nil {
 		log.Fatal(err)
 	}
-	
+
 	return EWORDS
 }
 
@@ -188,21 +188,32 @@ func edits1(word string, ch chan string) {
 	var splits []Pair
 
 	// Creating a list of all tuples formed by splitting the word at all possible positions
-	for i := 0; i < len(word) + 1; i++ {
-		splits = append(splits, Pair{word[:i], word[i:]}) }
+	for i := 0; i < len(word)+1; i++ {
+		splits = append(splits, Pair{word[:i], word[i:]})
+	}
 
 	for _, s := range splits {
 		// Words formed by deleting one character from original word
-		if len(s.b) > 0 { ch <- s.a + s.b[1:] }
+		if len(s.b) > 0 {
+			ch <- s.a + s.b[1:]
+		}
 
 		// Words formed by transposing two characters in original word
-		if len(s.b) > 1 { ch <- s.a + string(s.b[1]) + string(s.b[0]) + s.b[2:] }
+		if len(s.b) > 1 {
+			ch <- s.a + string(s.b[1]) + string(s.b[0]) + s.b[2:]
+		}
 
 		// Words formed by replacing one character in original word
-		for _, c := range alphabet { if len(s.b) > 0 { ch <- s.a + string(c) + s.b[1:] }}
+		for _, c := range alphabet {
+			if len(s.b) > 0 {
+				ch <- s.a + string(c) + s.b[1:]
+			}
+		}
 
 		// Words formed by adding one character to original word
-		for _, c := range alphabet { ch <- s.a + string(c) + s.b }
+		for _, c := range alphabet {
+			ch <- s.a + string(c) + s.b
+		}
 	}
 }
 
@@ -211,8 +222,10 @@ func edits2(word string, ch chan string) {
 	ch1 := make(chan string, 1024*1024)
 	go func() { edits1(word, ch1); ch1 <- "" }()
 	for e1 := range ch1 {
-		if e1 == "" { break }
-		go func(e1 string){ edits1(e1, ch) }(e1)
+		if e1 == "" {
+			break
+		}
+		go func(e1 string) { edits1(e1, ch) }(e1)
 	}
 }
 
@@ -224,11 +237,13 @@ func best(origWord string, edits func(string, chan string)) string {
 	var maxProb float64 = 0
 	var bestString string = ""
 
-    for word := range ch {
-		if word == "" { break }
+	for word := range ch {
+		if word == "" {
+			break
+		}
 
 		if word == origWord {
-			tempProb := float64(WordModel[word]) 
+			tempProb := float64(WordModel[word])
 
 			if tempProb > maxProb {
 				maxProb = tempProb
@@ -240,7 +255,7 @@ func best(origWord string, edits func(string, chan string)) string {
 				sum += ErrorModel[word][j]
 			}
 
-			tempProb := float64(WordModel[word]) * (float64(ErrorModel[word][origWord])/float64(sum))
+			tempProb := float64(WordModel[word]) * (float64(ErrorModel[word][origWord]) / float64(sum))
 			if tempProb > maxProb {
 				maxProb = tempProb
 				bestString = word
@@ -252,7 +267,9 @@ func best(origWord string, edits func(string, chan string)) string {
 		go func() { edits(origWord, ch); ch <- "" }()
 		maxFreq := 0
 		for word := range ch {
-			if word == "" { break }
+			if word == "" {
+				break
+			}
 			if freq, present := WordModel[word]; present && freq > maxFreq {
 				maxFreq, bestString = freq, word
 			}
@@ -266,13 +283,13 @@ func correct(word string) string {
 	var possibleWords []string
 
 	if _, present := WordModel[word]; present {
-		possibleWords = append(possibleWords, word)	
+		possibleWords = append(possibleWords, word)
 	}
 	if correction := best(word, edits1); correction != "" {
-		possibleWords = append(possibleWords, correction) 
+		possibleWords = append(possibleWords, correction)
 	}
-	if correction := best(word, edits2); correction != "" { 
-		possibleWords = append(possibleWords, correction) 
+	if correction := best(word, edits2); correction != "" {
+		possibleWords = append(possibleWords, correction)
 	}
 
 	// If no word at edit distance of 1 or 2 matches
@@ -291,10 +308,10 @@ func correct(word string) string {
 }
 
 func helper(word string, ch chan string) {
-	re   := regexp.MustCompile(`([^!?,.;]+)`)
+	re := regexp.MustCompile(`([^!?,.;]+)`)
 	ch <- re.ReplaceAllStringFunc(word, func(m string) string {
-				return correct(m)
-			})
+		return correct(m)
+	})
 }
 
 func Correctsentence(sentence string) string {
@@ -328,110 +345,110 @@ func Correctsentence(sentence string) string {
 
 func splits(text string, start int, L int) []Pair {
 	// "Return a list of all (first, rest) pairs; start <= len(first) <= L."
-	
+
 	// Default Values for start and L
 	if start == 0 {
-    		start = 1
+		start = 1
 	}
 	if L == 0 {
-		L = 10
-        }
+		L = 16
+	}
 
 	var splitArr []Pair
-	for i := start; i < int(math.Min( float64(L), float64(len(text)) ) + 1); i++ {
-		splitArr = append(splitArr, Pair{text[:i], text[i:]}) 
+	for i := start; i < int(math.Min(float64(L), float64(len(text)))+1); i++ {
+		splitArr = append(splitArr, Pair{text[:i], text[i:]})
 	}
-	
+
 	return splitArr
 }
 
 // Get probability/frequency of given word in WordModel
 func p1w(word string) float64 {
 	if freq, present := WordModel[word]; present {
-		return float64(freq)/float64(sumWordFreq)
+		return float64(freq) / float64(sumWordFreq)
 	}
-	
+
 	return float64(0)
 }
 
 // Get probability/frequency of given bigram in BigramModel
 func p2w(bigram string) float64 {
 	if freq, present := BigramModel[bigram]; present {
-		return float64(freq)/float64(sumBigramFreq)
+		return float64(freq) / float64(sumBigramFreq)
 	}
-	
+
 	return float64(0)
 }
 
 // The probability of a sequence of words, using bigram data, given prev word
 func pWords(words []string) float64 {
 	result := float64(1e3)
-	for i:= range words {
+	for i := range words {
 		if i == 0 {
-			result *= cPword(words[i], "<S>")	
+			result *= cPword(words[i], "<S>")
 		} else {
 			result *= cPword(words[i], words[i-1])
 		}
 	}
-	
+
 	return result
 }
 
 // Conditional probability of word, given previous word
 func cPword(word, prev string) float64 {
-    bigram := prev + " " + word
+	bigram := prev + " " + word
 
 	if prev != "<S>" && p2w(bigram) > 0 && p1w(prev) > 0 {
-        	return p2w(bigram) / p1w(prev)
+		return p2w(bigram) / p1w(prev)
 	}
-	
+
 	// Average the back-off value and zero
-    return p1w(word)/float64(2)
+	return p1w(word) / float64(2)
 }
 
 func segmentHelper(text string, memo map[string][]string) []string {
 	result := []string{}
-	
-	if len(text) == 0 { 
-       		return result
+
+	if len(text) == 0 {
+		return result
 	}
-	
+
 	if val, present := memo[text]; present {
 		return val
 	}
-	 
+
 	candidates := [][]string{}
 	for _, s := range splits(text, 0, 0) {
-	        candidates = append(candidates, append([]string{s.a}, segmentHelper(s.b, memo)...))
+		candidates = append(candidates, append([]string{s.a}, segmentHelper(s.b, memo)...))
 	}
-	
+
 	maxProb := float64(0)
-	for i:= range candidates {
+	for i := range candidates {
 		tempProb := pWords(candidates[i])
 		if tempProb > maxProb {
 			maxProb = tempProb
-			result  = candidates[i]
+			result = candidates[i]
 		}
 	}
-	
+
 	memo[text] = result
 	return result
 }
 
 func WordSegments(text string) string {
-	memo   := map[string][]string{}
+	memo := map[string][]string{}
 	result := segmentHelper(text, memo)
-	flag    = 1
+	flag = 1
 	return Correctsentence(strings.Join(result, " "))
 }
 
-func Init(){
+func Init() {
 	usr, err := user.Current()
-    if err != nil {
-        log.Fatal( err )
-    }
-	wordMapFile   = usr.HomeDir + wordMapFile
-	errorMapFile  = usr.HomeDir + errorMapFile
+	if err != nil {
+		log.Fatal(err)
+	}
+	wordMapFile = usr.HomeDir + wordMapFile
+	errorMapFile = usr.HomeDir + errorMapFile
 	bigramMapFile = usr.HomeDir + bigramMapFile
 
 	// Load WordMap
@@ -442,11 +459,11 @@ func Init(){
 		if err == nil {
 			decoder := gob.NewDecoder(file)
 			err = decoder.Decode(&WordModel)
-		} 
+		}
 		if err != nil {
 			log.Fatal(err)
 		}
-	  
+
 	} else if os.IsNotExist(err) {
 		WordModel = trainWordsModel("words.txt")
 		file, err := os.Create(wordMapFile)
@@ -458,7 +475,7 @@ func Init(){
 		} else {
 			log.Fatal(err)
 		}
-		 
+
 	} else {
 		log.Fatal(err)
 	}
@@ -471,11 +488,11 @@ func Init(){
 		if err == nil {
 			decoder := gob.NewDecoder(file)
 			err = decoder.Decode(&ErrorModel)
-		} 
+		}
 		if err != nil {
 			log.Fatal(err)
 		}
-	  
+
 	} else if os.IsNotExist(err) {
 		ErrorModel = trainErrorModel("errors.txt")
 		file, err := os.Create(errorMapFile)
@@ -499,11 +516,11 @@ func Init(){
 		if err == nil {
 			decoder := gob.NewDecoder(file)
 			err = decoder.Decode(&BigramModel)
-		} 
+		}
 		if err != nil {
 			log.Fatal(err)
 		}
-	  
+
 	} else if os.IsNotExist(err) {
 		BigramModel = trainBigramModel("bigrams.txt")
 		file, err := os.Create(bigramMapFile)
@@ -521,8 +538,8 @@ func Init(){
 
 	for _, v1 := range WordModel {
 		sumWordFreq += v1
-	} 
-	
+	}
+
 	for _, v2 := range BigramModel {
 		sumBigramFreq += v2
 	}
@@ -531,12 +548,12 @@ func Init(){
 // Save maps in file
 func SaveMaps() {
 	usr, err := user.Current()
-    if err != nil {
-        log.Fatal( err )
+	if err != nil {
+		log.Fatal(err)
 	}
-	wordMapFile  = usr.HomeDir + wordMapFile
+	wordMapFile = usr.HomeDir + wordMapFile
 	errorMapFile = usr.HomeDir + errorMapFile
-	 
+
 	// Save WordMap
 	if _, err := os.Stat(wordMapFile); err == nil {
 		file, err := os.Open(wordMapFile)
@@ -548,7 +565,7 @@ func SaveMaps() {
 		} else {
 			log.Fatal(err)
 		}
-	  
+
 	} else if os.IsNotExist(err) {
 		WordModel = trainWordsModel("words.txt")
 		file, err := os.Create(wordMapFile)
@@ -560,7 +577,7 @@ func SaveMaps() {
 		} else {
 			log.Fatal(err)
 		}
-		 
+
 	} else {
 		log.Fatal(err)
 	}
@@ -576,7 +593,7 @@ func SaveMaps() {
 		} else {
 			log.Fatal(err)
 		}
-	  
+
 	} else if os.IsNotExist(err) {
 		ErrorModel = trainErrorModel("errors.txt")
 		file, err := os.Create(errorMapFile)
@@ -597,8 +614,8 @@ func SaveMaps() {
 // func main() {
 // 	Init()
 // 	startTime := time.Now()
-// 	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes? far"))
-// 	b := "hellothereasdasfarasdadsdad"
+// 	fmt.Println(Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes? segmentation"))
+// 	b := "thisisatestofsegmentationofaverylongsequenceofwords"
 // 	fmt.Println(WordSegments(b))
 // 	fmt.Printf("Time: %v\n", time.Now().Sub(startTime))
 // }
