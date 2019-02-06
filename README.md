@@ -2,6 +2,11 @@
 Spell checking module for clita.
 
 ## Usage 
+**Initialisatio**  
+```go
+  spellcheck.Init()
+```
+
 **Correcting a text**  
 ```go
   spellcheck.Correctsentence("Speling Errurs IN somethink. Whutever; unusuel misteakes?")
