@@ -12,6 +12,7 @@ import (
 	"encoding/gob"
 	"math"
 	"strconv"
+	"path/filepath"
 )
 
 var WordModel map[string]int
@@ -465,7 +466,8 @@ func Init() {
 		}
 
 	} else if os.IsNotExist(err) {
-		WordModel = trainWordsModel("words.txt")
+		dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+		WordModel = trainWordsModel(dir + "/words.txt")
 		file, err := os.Create(wordMapFile)
 		defer file.Close()
 
@@ -494,7 +496,8 @@ func Init() {
 		}
 
 	} else if os.IsNotExist(err) {
-		ErrorModel = trainErrorModel("errors.txt")
+		dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+		ErrorModel = trainErrorModel(dir + "/errors.txt")
 		file, err := os.Create(errorMapFile)
 		defer file.Close()
 
@@ -522,7 +525,8 @@ func Init() {
 		}
 
 	} else if os.IsNotExist(err) {
-		BigramModel = trainBigramModel("bigrams.txt")
+		dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+		BigramModel = trainBigramModel(dir + "/bigrams.txt")
 		file, err := os.Create(bigramMapFile)
 		defer file.Close()
 
@@ -547,13 +551,7 @@ func Init() {
 
 // Save maps in file
 func SaveMaps() {
-	usr, err := user.Current()
-	if err != nil {
-		log.Fatal(err)
-	}
-	wordMapFile = usr.HomeDir + wordMapFile
-	errorMapFile = usr.HomeDir + errorMapFile
-
+	
 	// Save WordMap
 	if _, err := os.Stat(wordMapFile); err == nil {
 		file, err := os.Open(wordMapFile)
@@ -567,7 +565,8 @@ func SaveMaps() {
 		}
 
 	} else if os.IsNotExist(err) {
-		WordModel = trainWordsModel("words.txt")
+		dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+		WordModel = trainWordsModel(dir + "/words.txt")
 		file, err := os.Create(wordMapFile)
 		defer file.Close()
 
@@ -595,7 +594,8 @@ func SaveMaps() {
 		}
 
 	} else if os.IsNotExist(err) {
-		ErrorModel = trainErrorModel("errors.txt")
+		dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+		ErrorModel = trainErrorModel(dir + "/errors.txt")
 		file, err := os.Create(errorMapFile)
 		defer file.Close()
 
